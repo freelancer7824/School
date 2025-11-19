@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Subjects</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 30px;
+        }
+        .header {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-container {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .btn-submit {
+            background-color: #4a6cf7;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 5px;
+            border: none;
+            font-weight: 500;
+        }
+        .btn-submit:hover {
+            background-color: #3a5ce5;
+        }
+        .form-label {
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .form-control, .form-select {
+            padding: 10px 15px;
+            border-radius: 5px;
+        }
+        .page-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .subtitle {
+            color: #6c757d;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .active-dot {
+            background-color: #28a745;
+        }
+        .inactive-dot {
+            background-color: #dc3545;
+        }
+        .subjects-list {
+            margin-top: 30px;
+        }
+        .subject-card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-left: 4px solid #4a6cf7;
+        }
+        .subject-name {
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        .subject-details {
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .delete-btn {
+            color: #dc3545;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        .nav-tabs {
+            margin-bottom: 20px;
+        }
+        .nav-link.active {
+            font-weight: 500;
+            color: #4a6cf7;
+            border-bottom: 2px solid #4a6cf7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 class="page-title">Manage Subjects</h2>
+            <div class="d-flex">
+                <div class="status-indicator">
+                    <span class="status-dot active-dot"></span>
+                    <span>Active</span>
+                </div>
+                <div class="status-indicator">
+                    <span class="status-dot inactive-dot"></span>
+                    <span>Inactive</span>
+                </div>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link active" href="subject.html">Manage Subjects</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="add-class.html">Manage Classes</a>
+            </li>
+        </ul>
+
+        <div class="form-container">
+            <h4 class="mb-4">Create New Subject</h4>
+            <form id="subjectForm">
+                <div class="mb-3">
+                    <label for="subjectName" class="form-label">Name *</label>
+                    <input type="text" class="form-control" id="subjectName" placeholder="Name of Subject" required>
+                </div>
+                <div class="mb-3">
+                    <label for="selectedClass" class="form-label">Select Class</label>
+                    <select class="form-select" id="selectedClass">
+                        <option value="">Select a class</option>
+                        <!-- Classes will be loaded here dynamically -->
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="subjectType" class="form-label">Subject Type</label>
+                    <select class="form-select" id="subjectType">
+                        <option value="Core">Core</option>
+                        <option value="Elective">Elective</option>
+                        <option value="Optional">Optional</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-submit">Submit form</button>
+            </form>
+        </div>
+
+        <div class="subjects-list">
+            <h4 class="mb-3">All Subjects</h4>
+            <div id="subjectsContainer">
+                <!-- Subjects will be loaded here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+    
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAjoRYAXQa4J43L4oLmHmUoK7ZqMKCdrxI",
+            authDomain: "programme-7eb45.firebaseapp.com",
+            databaseURL: "https://programme-7eb45-default-rtdb.firebaseio.com",
+            projectId: "programme-7eb45",
+            storageBucket: "programme-7eb45.firebasestorage.app",
+            messagingSenderId: "431090813085",
+            appId: "1:431090813085:web:496fc0d8bb5e57af53ec74",
+            measurementId: "G-FE49VB7F1B"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Reference to the subjects and classes in Firebase
+        const subjectsRef = database.ref('subjects');
+        const classesRef = database.ref('classes');
+
+        // Load classes for the dropdown
+        classesRef.on('value', (snapshot) => {
+            const classes = snapshot.val();
+            const classSelect = document.getElementById('selectedClass');
+            
+            // Clear existing options except the first one
+            while (classSelect.options.length > 1) {
+                classSelect.remove(1);
+            }
+            
+            if (classes) {
+                Object.keys(classes).forEach(classId => {
+                    const classItem = classes[classId];
+                    
+                    const option = document.createElement('option');
+                    option.value = classId;
+                    option.textContent = `${classItem.name} (${classItem.type})`;
+                    
+                    classSelect.appendChild(option);
+                });
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('subjectForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const subjectName = document.getElementById('subjectName').value;
+            const selectedClass = document.getElementById('selectedClass').value;
+            const subjectType = document.getElementById('subjectType').value;
+            
+            if (subjectName.trim() === '') {
+                alert('Please enter a subject name');
+                return;
+            }
+            
+            if (selectedClass === '') {
+                alert('Please select a class');
+                return;
+            }
+            
+            // Get class name for display
+            const className = document.getElementById('selectedClass').options[document.getElementById('selectedClass').selectedIndex].text;
+            
+            // Generate a unique ID for the subject
+            const subjectId = Date.now().toString();
+            
+            // Save subject to Firebase
+            subjectsRef.child(subjectId).set({
+                name: subjectName,
+                classId: selectedClass,
+                className: className,
+                type: subjectType,
+                createdAt: new Date().toISOString()
+            })
+            .then(() => {
+                // Clear the form
+                document.getElementById('subjectForm').reset();
+                console.log('Subject saved successfully!');
+            })
+            .catch((error) => {
+                console.error('Error saving subject:', error);
+                alert('Error saving subject. Please try again.');
+            });
+        });
+
+        // Load subjects from Firebase
+        subjectsRef.on('value', (snapshot) => {
+            const subjects = snapshot.val();
+            const subjectsContainer = document.getElementById('subjectsContainer');
+            
+            // Clear the container
+            subjectsContainer.innerHTML = '';
+            
+            if (subjects) {
+                Object.keys(subjects).forEach(subjectId => {
+                    const subject = subjects[subjectId];
+                    
+                    const subjectCard = document.createElement('div');
+                    subjectCard.className = 'subject-card';
+                    subjectCard.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="subject-name">${subject.name}</div>
+                                <div class="subject-details">${subject.className} | ${subject.type}</div>
+                            </div>
+                            <button class="delete-btn" data-id="${subjectId}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    subjectsContainer.appendChild(subjectCard);
+                });
+                
+                // Add event listeners to delete buttons
+                document.querySelectorAll('.delete-btn').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const subjectId = this.getAttribute('data-id');
+                        if (confirm('Are you sure you want to delete this subject?')) {
+                            subjectsRef.child(subjectId).remove()
+                                .then(() => {
+                                    console.log('Subject deleted successfully!');
+                                })
+                                .catch((error) => {
+                                    console.error('Error deleting subject:', error);
+                                    alert('Error deleting subject. Please try again.');
+                                });
+                        }
+                    });
+                });
+            } else {
+                subjectsContainer.innerHTML = '<p>No subjects found. Add your first subject above.</p>';
+            }
+        });
+    </script>
+</body>
+</html>

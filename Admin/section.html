@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Section Management - Firebase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6', // Tailwind blue-500
+                        secondary: '#6b7280', // Tailwind gray-500
+                        success: '#10b981', // Tailwind green-500
+                        error: '#ef4444' // Tailwind red-500
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f3f4f6; /* bg-gray-100 */
+        }
+        .form-card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .modal-backdrop { background-color: rgba(0, 0, 0, 0.4); }
+        .required-star { color: #ef4444; margin-left: 0.25rem; }
+        .input-text {
+            border: 1px solid #d1d5db;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            width: 100%;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        .input-text:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+        select.input-text {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z' clip-rule='evenodd' /%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+        }
+        .section-item {
+            transition: all 0.2s ease;
+        }
+        .section-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+    <!-- Message Modal -->
+    <div id="message-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop transition-opacity duration-300">
+        <div class="bg-white p-6 rounded-lg shadow-2xl max-w-sm w-full transform transition-transform duration-300 scale-95">
+            <h3 id="message-title" class="text-xl font-semibold mb-3 text-primary">Success</h3>
+            <p id="message-content" class="text-gray-700">Operation completed successfully!</p>
+            <div class="mt-4 text-right">
+                <button onclick="hideMessage()" class="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-150">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop transition-opacity duration-300">
+        <div class="bg-white p-6 rounded-lg shadow-2xl max-w-sm w-full transform transition-transform duration-300 scale-95">
+            <h3 id="confirm-title" class="text-xl font-semibold mb-3 text-error">Confirm Deletion</h3>
+            <p id="confirm-content" class="text-gray-700">Are you sure you want to delete this section?</p>
+            <div class="mt-4 flex justify-end space-x-3">
+                <button id="cancel-delete" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-150">Cancel</button>
+                <button id="confirm-delete" class="bg-error text-white px-4 py-2 rounded-md hover:bg-red-600 transition duration-150">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Form Modal -->
+    <div id="section-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center modal-backdrop transition-opacity duration-300 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-2xl max-w-md w-full max-h-full overflow-y-auto transform transition-transform duration-300 scale-95" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <header class="flex justify-between items-center pb-3 border-b mb-4">
+                <h3 id="modal-title" class="text-xl font-semibold text-gray-800">Add New Section</h3>
+                <button type="button" onclick="closeSectionModal()" class="text-gray-400 hover:text-gray-600 transition">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </header>
+
+            <form id="section-form">
+                <input type="hidden" id="section-id" value="">
+                
+                <div class="space-y-4">
+                    <div>
+                        <label for="section-class" class="block text-sm font-medium text-gray-700">Class <span class="required-star">*</span></label>
+                        <select id="section-class" class="input-text mt-1" required>
+                            <option value="">Select Class...</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="section-name" class="block text-sm font-medium text-gray-700">Section Name <span class="required-star">*</span></label>
+                        <input type="text" id="section-name" class="input-text mt-1" placeholder="Section Name" required>
+                    </div>
+                    
+                    <div>
+                        <label for="section-capacity" class="block text-sm font-medium text-gray-700">Capacity</label>
+                        <input type="number" id="section-capacity" class="input-text mt-1" placeholder="Maximum Students" min="1" max="100">
+                    </div>
+                    
+                    <div>
+                        <label for="section-description" class="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea id="section-description" class="input-text mt-1" placeholder="Section Description" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-8 pt-4 border-t">
+                    <button type="button" onclick="closeSectionModal()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-150">Cancel</button>
+                    <button type="submit" class="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-150">Save Section</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto p-4 md:p-8">
+        <header class="flex justify-between items-center mb-6 flex-wrap">
+            <h1 class="text-2xl font-bold text-gray-800 flex items-center mb-2 md:mb-0">
+                <svg class="h-6 w-6 text-gray-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                </svg>
+                Section Management
+            </h1>
+            <div class="text-gray-500 text-sm">
+                Current Session: 2025-2026
+            </div>
+        </header>
+
+        <div class="form-card bg-white p-6 md:p-10 rounded-lg">
+            <div class="flex justify-between items-center border-b pb-4 mb-6 flex-wrap">
+                <p class="text-lg font-medium text-gray-700 mb-2 md:mb-0">Manage Class Sections</p>
+                <button id="add-section-btn" class="flex items-center bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-150">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                    Add New Section
+                </button>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="filter-class" class="block text-sm font-medium text-gray-700">Filter by Class</label>
+                    <select id="filter-class" class="input-text mt-1">
+                        <option value="">All Classes</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filter-search" class="block text-sm font-medium text-gray-700">Search Sections</label>
+                    <input type="text" id="filter-search" class="input-text mt-1" placeholder="Search by section name...">
+                </div>
+                <div class="flex items-end">
+                    <button id="clear-filters" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition duration-150 w-full">
+                        Clear Filters
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sections List -->
+            <div id="sections-container" class="space-y-4">
+                <div class="text-center py-8 text-gray-500">
+                    <svg class="h-12 w-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <p class="mt-2">Loading sections...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+
+        // --- Configuration and Initialization ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAjoRYAXQa4J43L4oLmHmUoK7ZqMKCdrxI",
+            authDomain: "programme-7eb45.firebaseapp.com",
+            databaseURL: "https://programme-7eb45-default-rtdb.firebaseio.com",
+            projectId: "programme-7eb45",
+            storageBucket: "programme-7eb45.firebasestorage.app",
+            messagingSenderId: "431090813085",
+            appId: "1:431090813085:web:496fc0d8bb5e57af53ec74",
+            measurementId: "G-FE49VB7F1B"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let isAuthReady = false;
+        let allClasses = [];
+        let allSections = [];
+        let sectionToDelete = null;
+
+        // --- Utility Functions ---
+        const showMessage = (title, content, isSuccess = true) => {
+            document.getElementById('message-title').textContent = title;
+            document.getElementById('message-title').className = isSuccess ? 'text-xl font-semibold mb-3 text-success' : 'text-xl font-semibold mb-3 text-error';
+            document.getElementById('message-content').textContent = content;
+            document.getElementById('message-modal').classList.remove('hidden');
+        };
+
+        window.hideMessage = () => {
+            document.getElementById('message-modal').classList.add('hidden');
+        };
+
+        const showConfirmModal = (section) => {
+            sectionToDelete = section;
+            document.getElementById('confirm-content').textContent = `Are you sure you want to delete section "${section.name}"?`;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        };
+
+        const hideConfirmModal = () => {
+            sectionToDelete = null;
+            document.getElementById('confirm-modal').classList.add('hidden');
+        };
+
+        const showSectionModal = (section = null) => {
+            document.getElementById('section-modal').classList.remove('hidden');
+            document.getElementById('section-form').reset();
+            
+            if (section) {
+                // Edit mode
+                document.getElementById('modal-title').textContent = 'Edit Section';
+                document.getElementById('section-id').value = section.id;
+                document.getElementById('section-class').value = section.classId;
+                document.getElementById('section-name').value = section.name;
+                document.getElementById('section-capacity').value = section.capacity || '';
+                document.getElementById('section-description').value = section.description || '';
+            } else {
+                // Add mode
+                document.getElementById('modal-title').textContent = 'Add New Section';
+                document.getElementById('section-id').value = '';
+            }
+        };
+
+        window.closeSectionModal = () => {
+            document.getElementById('section-modal').classList.add('hidden');
+        };
+
+        // --- Firebase Data Loading Functions ---
+        const loadClassesFromFirebase = async () => {
+            try {
+                const q = query(collection(db, "classes"), orderBy("name"));
+                const querySnapshot = await getDocs(q);
+                allClasses = [];
+                
+                const classSelect = document.getElementById('section-class');
+                const filterClassSelect = document.getElementById('filter-class');
+                
+                // Clear existing options except the first one
+                classSelect.innerHTML = '<option value="">Select Class...</option>';
+                filterClassSelect.innerHTML = '<option value="">All Classes</option>';
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const classItem = {
+                        id: doc.id,
+                        name: data.name,
+                        sections: data.sections || []
+                    };
+                    allClasses.push(classItem);
+
+                    // Add to form select
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = data.name;
+                    classSelect.appendChild(option);
+
+                    // Add to filter select
+                    const filterOption = document.createElement('option');
+                    filterOption.value = doc.id;
+                    filterOption.textContent = data.name;
+                    filterClassSelect.appendChild(filterOption);
+                });
+
+            } catch (error) {
+                console.error("Error loading classes:", error);
+                document.getElementById('section-class').innerHTML = '<option value="">Error loading classes</option>';
+            }
+        };
+
+        const loadSectionsFromFirebase = async () => {
+            try {
+                const q = query(collection(db, "sections"), orderBy("name"));
+                const querySnapshot = await getDocs(q);
+                allSections = [];
+                
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const section = {
+                        id: doc.id,
+                        name: data.name,
+                        classId: data.classId,
+                        className: data.className || 'Unknown Class',
+                        capacity: data.capacity,
+                        description: data.description,
+                        createdAt: data.createdAt,
+                        studentCount: data.studentCount || 0
+                    };
+                    allSections.push(section);
+                });
+
+                renderSections(allSections);
+
+            } catch (error) {
+                console.error("Error loading sections:", error);
+                document.getElementById('sections-container').innerHTML = `
+                    <div class="text-center py-8 text-error">
+                        <p>Error loading sections. Please try again.</p>
+                    </div>
+                `;
+            }
+        };
+
+        // --- Section Rendering and Filtering ---
+        const renderSections = (sections) => {
+            const container = document.getElementById('sections-container');
+            
+            if (sections.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <svg class="h-12 w-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p class="mt-2">No sections found. Add your first section!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = '';
+            
+            sections.forEach(section => {
+                const sectionElement = document.createElement('div');
+                sectionElement.className = 'section-item bg-white border border-gray-200 rounded-lg p-4';
+                
+                sectionElement.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">${section.name}</h3>
+                            <p class="text-gray-600 mt-1">Class: ${section.className}</p>
+                            ${section.description ? `<p class="text-gray-500 mt-1">${section.description}</p>` : ''}
+                            <div class="flex items-center mt-2 text-sm text-gray-500">
+                                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                                <span>${section.studentCount} students</span>
+                                ${section.capacity ? `<span class="ml-4">Capacity: ${section.capacity}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="edit-section-btn text-primary hover:text-blue-700 transition" data-id="${section.id}">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </button>
+                            <button class="delete-section-btn text-error hover:text-red-700 transition" data-id="${section.id}">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(sectionElement);
+            });
+
+            // Add event listeners to buttons
+            document.querySelectorAll('.edit-section-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const sectionId = e.currentTarget.getAttribute('data-id');
+                    const section = allSections.find(s => s.id === sectionId);
+                    if (section) showSectionModal(section);
+                });
+            });
+
+            document.querySelectorAll('.delete-section-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const sectionId = e.currentTarget.getAttribute('data-id');
+                    const section = allSections.find(s => s.id === sectionId);
+                    if (section) showConfirmModal(section);
+                });
+            });
+        };
+
+        const filterSections = () => {
+            const classFilter = document.getElementById('filter-class').value;
+            const searchFilter = document.getElementById('filter-search').value.toLowerCase();
+            
+            let filteredSections = [...allSections];
+            
+            // Filter by class
+            if (classFilter) {
+                filteredSections = filteredSections.filter(section => section.classId === classFilter);
+            }
+            
+            // Filter by search term
+            if (searchFilter) {
+                filteredSections = filteredSections.filter(section => 
+                    section.name.toLowerCase().includes(searchFilter) || 
+                    section.className.toLowerCase().includes(searchFilter)
+                );
+            }
+            
+            renderSections(filteredSections);
+        };
+
+        // --- Authentication & Initialization ---
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                signInAnonymously(auth)
+                    .then(() => {
+                        console.log("Signed in anonymously.");
+                        isAuthReady = true;
+                        loadClassesFromFirebase();
+                        loadSectionsFromFirebase();
+                    })
+                    .catch((error) => {
+                        console.error("Initialization error:", error);
+                        showMessage("Auth Error", "Could not initialize authentication.", false);
+                    });
+            } else {
+                isAuthReady = true;
+                loadClassesFromFirebase();
+                loadSectionsFromFirebase();
+            }
+        });
+
+        // --- Event Listeners ---
+        document.getElementById('add-section-btn').addEventListener('click', () => {
+            showSectionModal();
+        });
+
+        document.getElementById('section-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const sectionId = document.getElementById('section-id').value;
+            const classId = document.getElementById('section-class').value;
+            const sectionName = document.getElementById('section-name').value.trim();
+            const capacity = document.getElementById('section-capacity').value;
+            const description = document.getElementById('section-description').value.trim();
+
+            if (!classId || !sectionName) {
+                showMessage("Validation Error", "Please fill in all required fields.", false);
+                return;
+            }
+
+            try {
+                const selectedClass = allClasses.find(c => c.id === classId);
+                if (!selectedClass) {
+                    showMessage("Error", "Selected class not found.", false);
+                    return;
+                }
+
+                const sectionData = {
+                    name: sectionName,
+                    classId: classId,
+                    className: selectedClass.name,
+                    capacity: capacity ? parseInt(capacity) : null,
+                    description: description || null,
+                    studentCount: 0,
+                    createdAt: serverTimestamp()
+                };
+
+                if (sectionId) {
+                    // Update existing section
+                    await updateDoc(doc(db, "sections", sectionId), sectionData);
+                    showMessage("Success", "Section updated successfully!", true);
+                } else {
+                    // Add new section
+                    await addDoc(collection(db, "sections"), sectionData);
+                    showMessage("Success", "Section created successfully!", true);
+                }
+
+                closeSectionModal();
+                loadSectionsFromFirebase();
+
+            } catch (error) {
+                console.error("Section operation error:", error);
+                showMessage("Error", `An error occurred: ${error.message}`, false);
+            }
+        });
+
+        document.getElementById('confirm-delete').addEventListener('click', async () => {
+            if (!sectionToDelete) return;
+
+            try {
+                await deleteDoc(doc(db, "sections", sectionToDelete.id));
+                showMessage("Success", "Section deleted successfully!", true);
+                hideConfirmModal();
+                loadSectionsFromFirebase();
+            } catch (error) {
+                console.error("Section deletion error:", error);
+                showMessage("Error", `Could not delete section: ${error.message}`, false);
+            }
+        });
+
+        document.getElementById('cancel-delete').addEventListener('click', hideConfirmModal);
+
+        document.getElementById('filter-class').addEventListener('change', filterSections);
+        document.getElementById('filter-search').addEventListener('input', filterSections);
+        document.getElementById('clear-filters').addEventListener('click', () => {
+            document.getElementById('filter-class').value = '';
+            document.getElementById('filter-search').value = '';
+            filterSections();
+        });
+    </script>
+</body>
+</html>

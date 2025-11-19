@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admit Student - Firebase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6', // Tailwind blue-500
+                        secondary: '#6b7280', // Tailwind gray-500
+                        success: '#10b981', // Tailwind green-500
+                        error: '#ef4444' // Tailwind red-500
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom styles for consistency and responsiveness */
+        body {
+            background-color: #f3f4f6; /* bg-gray-100 */
+        }
+        .form-card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        /* Step Indicator Styles */
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            position: relative;
+            flex-grow: 1;
+            padding: 1rem 0;
+            color: #d1d5db;
+            min-width: 50%; 
+        }
+        .step-indicator::before, .step-indicator::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            height: 2px;
+            background-color: #e5e7eb;
+            z-index: 0;
+        }
+        .step-indicator:first-child::before { display: none; }
+        .step-indicator:first-child::after { left: 50%; right: 0; }
+        .step-indicator:last-child::after { display: none; }
+        .step-indicator:last-child::before { left: 0; right: 50%; }
+        .step-indicator:not(:first-child):not(:last-child)::before,
+        .step-indicator:not(:first-child):not(:last-child)::after { left: 0; right: 0; }
+        
+        .step-indicator.active, .step-indicator.complete { color: #3b82f6; }
+        .step-indicator.complete::before, .step-indicator.active::before,
+        .step-indicator.complete::after, .step-indicator.active::after { background-color: #3b82f6; }
+
+        .step-circle {
+            position: relative;
+            z-index: 1;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            border: 2px solid #d1d5db;
+            background-color: white;
+            transition: all 0.3s ease;
+        }
+        .step-indicator.active .step-circle { border-color: #3b82f6; color: #3b82f6; }
+        .step-indicator.complete .step-circle { background-color: #3b82f6; border-color: #3b82f6; color: white; }
+        .step-indicator .step-label {
+            position: absolute;
+            top: 100%;
+            margin-top: 0.5rem;
+            white-space: nowrap;
+        }
+        .step-indicator.complete .step-circle .pencil { display: none; }
+        .step-indicator:not(.complete) .step-circle .checkmark { display: none; }
+
+        .modal-backdrop { background-color: rgba(0, 0, 0, 0.4); }
+        .required-star { color: #ef4444; margin-left: 0.25rem; }
+        .input-text {
+            border: 1px solid #d1d5db;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            width: 100%;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        .input-text:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+        select.input-text {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z' clip-rule='evenodd' /%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+        }
+
+        /* Custom file input style */
+        .custom-file-input { opacity: 0; width: 100%; height: 100%; position: absolute; cursor: pointer; }
+        .file-input-wrapper {
+            display: flex;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            overflow: hidden;
+            background-color: white;
+            position: relative;
+        }
+        .file-name-display {
+            flex-grow: 1;
+            padding: 0.5rem 0.75rem;
+            color: #6b7280;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .file-choose-button {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+    <div id="message-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop transition-opacity duration-300">
+        <div class="bg-white p-6 rounded-lg shadow-2xl max-w-sm w-full transform transition-transform duration-300 scale-95">
+            <h3 id="message-title" class="text-xl font-semibold mb-3 text-primary">Success</h3>
+            <p id="message-content" class="text-gray-700">Admission data saved successfully!</p>
+            <div class="mt-4 text-right">
+                <button onclick="hideMessage()" class="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-150">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto p-4 md:p-8">
+        <header class="flex justify-between items-center mb-6 flex-wrap">
+            <h1 class="text-2xl font-bold text-gray-800 flex items-center mb-2 md:mb-0">
+                <svg class="h-6 w-6 text-gray-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0h-3c-.006-.016-.013-.03-.02-.047A3.992 3.992 0 0012 16a3.992 3.992 0 00-2.98.953C8.013 19.97 8.006 19.984 8 20H3z"></path></svg>
+                Admit Student
+            </h1>
+            <div class="text-gray-500 text-sm">
+                Current Session: 2025-2026
+            </div>
+        </header>
+
+        <div class="form-card bg-white p-6 md:p-10 rounded-lg">
+            <div class="flex justify-between items-center border-b pb-4 mb-6 flex-wrap">
+                <p class="text-lg font-medium text-gray-700 mb-2 md:mb-0">Please Fill The Form Below To Admit A New Student</p>
+                <div class="flex items-center text-gray-400">
+                    <button class="hover:text-gray-600 transition">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <button class="hover:text-gray-600 transition ml-2">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex justify-between mb-8 overflow-x-hidden">
+                <div id="step-1-indicator" class="step-indicator active justify-start md:justify-center">
+                    <span class="step-circle">
+                        <svg class="checkmark w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span class="pencil w-5 h-5 text-lg font-bold">1</span>
+                    </span>
+                    <span class="step-label text-sm font-medium -translate-x-1/2">Personal Data</span>
+                </div>
+
+                <div id="step-2-indicator" class="step-indicator justify-end md:justify-center">
+                    <span class="step-circle">
+                        <span class="text-sm font-bold">2</span>
+                        <svg class="checkmark w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display: none;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </span>
+                    <span class="step-label text-sm font-medium translate-x-1/2">Student Data</span>
+                </div>
+            </div>
+
+            <form id="admission-form">
+                <div id="step-1-content" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <div>
+                        <label for="fullName" class="block text-sm font-medium text-gray-700">Full Name <span class="required-star">*</span></label>
+                        <input type="text" id="fullName" class="input-text mt-1" placeholder="Full Name" required>
+                    </div>
+                    <div>
+                        <label for="address" class="block text-sm font-medium text-gray-700">Address <span class="required-star">*</span></label>
+                        <input type="text" id="address" class="input-text mt-1" placeholder="Address" required>
+                    </div>
+
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
+                        <input type="email" id="email" class="input-text mt-1" placeholder="Email Address">
+                    </div>
+                    <div>
+                        <label for="gender" class="block text-sm font-medium text-gray-700">Gender <span class="required-star">*</span></label>
+                        <select id="gender" class="input-text mt-1" required>
+                            <option value="">Choose...</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="dateOfBirth" class="block text-sm font-medium text-gray-700">Date of Birth</label>
+                        <input type="date" id="dateOfBirth" class="input-text mt-1">
+                    </div>
+                    <div>
+                        <label for="phone" class="block text-sm font-medium text-gray-700">Phone <span class="required-star">*</span></label>
+                        <input type="tel" id="phone" class="input-text mt-1" placeholder="Phone" required>
+                    </div>
+
+                    <div>
+                        <label for="nationality" class="block text-sm font-medium text-gray-700">Nationality <span class="required-star">*</span></label>
+                        <select id="nationality" class="input-text mt-1" required>
+                            <option value="">Choose...</option>
+                            <option value="Bangladeshi">Bangladeshi</option>
+                            <option value="Indian">Indian</option>
+                            <option value="American">American</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="telephone" class="block text-sm font-medium text-gray-700">Telephone</label>
+                        <input type="tel" id="telephone" class="input-text mt-1" placeholder="Telephone">
+                    </div>
+
+                    <div>
+                        <label for="state" class="block text-sm font-medium text-gray-700">State <span class="required-star">*</span></label>
+                        <select id="state" class="input-text mt-1" required>
+                            <option value="">Choose...</option>
+                            <option value="Dhaka">Dhaka</option>
+                            <option value="Chittagong">Chittagong</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="district" class="block text-sm font-medium text-gray-700">District <span class="required-star">*</span></label>
+                        <select id="district" class="input-text mt-1" required>
+                            <option value="">Select State First...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="bloodGroup" class="block text-sm font-medium text-gray-700">Blood Group</label>
+                        <select id="bloodGroup" class="input-text mt-1">
+                            <option value="">Choose...</option>
+                            <option value="A+">A+</option>
+                            <option value="B+">B+</option>
+                            <option value="O+">O+</option>
+                            <option value="AB+">AB+</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-span-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Upload Passport Photo:</label>
+                        <div class="file-input-wrapper relative">
+                            <input type="file" id="passportPhoto" class="custom-file-input" accept="image/jpeg, image/png">
+                            <span id="file-name-display" class="file-name-display">No file selected</span>
+                            <span class="file-choose-button">Choose File</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Accepted Images: jpeg, png. Max file size 2Mb</p>
+                    </div>
+                </div>
+
+                <div id="step-2-content" class="grid grid-cols-1 md:grid-cols-2 gap-6" style="display: none;">
+
+                    <div>
+                        <label for="class" class="block text-sm font-medium text-gray-700">Class <span class="required-star">*</span></label>
+                        <select id="class" class="input-text mt-1" required>
+                            <option value="">Choose...</option>
+                            <option value="1">Class 1</option>
+                            <option value="2">Class 2</option>
+                            <option value="9">Class 9</option>
+                            <option value="10">Class 10</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="section" class="block text-sm font-medium text-gray-700">Section <span class="required-star">*</span></label>
+                        <select id="section" class="input-text mt-1" required>
+                            <option value="">Select Class ...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="group" class="block text-sm font-medium text-gray-700">Group:</label>
+                        <select id="group" class="input-text mt-1">
+                            <option value="">Select Group</option>
+                            <option value="science">Science</option>
+                            <option value="commerce">Commerce</option>
+                            <option value="arts">Arts</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-span-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Parent Account: <span class="required-star">*</span>
+                            <button type="button" id="addNewParent" class="text-primary hover:underline text-xs ml-2">
+                                + Add New Parent
+                            </button>
+                        </label>
+                        <div class="relative mb-2">
+                            <input type="text" id="parentSearchInput" class="input-text pr-10" placeholder="Search by Phone or Name...">
+                            <svg class="h-5 w-5 absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                        <select id="parent" class="input-text" required>
+                            <option value="">Loading Parents...</option>
+                            </select>
+                        <p id="parent-info-display" class="text-xs text-success mt-1 hidden">
+                            Parent Selected: <strong id="selected-parent-name"></strong> (ID: <span id="selected-parent-id"></span>)
+                        </p>
+                    </div>
+
+                    <div>
+                        <label for="yearAdmitted" class="block text-sm font-medium text-gray-700">Year Admitted <span class="required-star">*</span></label>
+                        <select id="yearAdmitted" class="input-text mt-1" required>
+                            <option value="">Choose...</option>
+                            <option value="2025">2025</option>
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="rollNumber" class="block text-sm font-medium text-gray-700">Position/Roll Number:</label>
+                        <input type="text" id="rollNumber" class="input-text mt-1" placeholder="Class Roll Number">
+                    </div>
+
+                    <div>
+                        <label for="admissionNumber" class="block text-sm font-medium text-gray-700">Admission Number:</label>
+                        <input type="text" id="admissionNumber" class="input-text mt-1" placeholder="Admission Number">
+                    </div>
+                    <div>
+                        <label for="dormitory" class="block text-sm font-medium text-gray-700">Dormitory:</label>
+                        <select id="dormitory" class="input-text mt-1">
+                            <option value="">Choose...</option>
+                            <option value="A">Dormitory A</option>
+                            <option value="B">Dormitory B</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="dormitoryRoomNo" class="block text-sm font-medium text-gray-700">Dormitory Room No:</label>
+                        <input type="text" id="dormitoryRoomNo" class="input-text mt-1" placeholder="Dormitory Room No">
+                    </div>
+                    <div>
+                        <label for="sportHouse" class="block text-sm font-medium text-gray-700">Sport House:</label>
+                        <input type="text" id="sportHouse" class="input-text mt-1" placeholder="Sport House">
+                    </div>
+                    
+                    <div class="col-span-full mt-4">
+                        <h3 class="text-lg font-semibold text-gray-700 mb-3 border-t pt-4">Choose Subjects:</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Mandatory Subjects</label>
+                                <div class="mt-1 space-y-2">
+                                    <div class="flex items-center"><input type="checkbox" name="mandatorySubject" value="Bangla" checked disabled class="rounded text-primary focus:ring-primary"><span class="ml-2 text-sm text-gray-600">Bangla</span></div>
+                                    <div class="flex items-center"><input type="checkbox" name="mandatorySubject" value="English" checked disabled class="rounded text-primary focus:ring-primary"><span class="ml-2 text-sm text-gray-600">English</span></div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Additional Subjects</label>
+                                <div id="additional-subjects-list" class="mt-1 space-y-2">
+                                    <div class="flex items-center"><input type="checkbox" name="additionalSubject" value="General Math" class="rounded text-primary focus:ring-primary"><span class="ml-2 text-sm text-gray-600">General Math</span></div>
+                                    <div class="flex items-center"><input type="checkbox" name="additionalSubject" value="Social Science" class="rounded text-primary focus:ring-primary"><span class="ml-2 text-sm text-gray-600">Social Science</span></div>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="fourthSubject" class="block text-sm font-medium text-gray-700">Fourth Subject (Optional)</label>
+                                <select id="fourthSubject" class="input-text mt-1">
+                                    <option value="">Select Fourth Subject</option>
+                                    <option value="Biology">Biology</option>
+                                    <option value="Chemistry">Chemistry</option>
+                                    <option value="Higher Math">Higher Math</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-4 mt-8 pt-4 border-t">
+                    <button type="button" id="prev-btn" class="hidden flex items-center bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition duration-150">
+                        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                        Previous
+                    </button>
+                    <button type="button" id="next-btn" class="flex items-center bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-150">
+                        Next
+                        <svg class="h-4 w-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    </button>
+                    <button type="submit" id="submit-btn" class="hidden flex items-center bg-primary text-white px-6 py-2 rounded-md hover:bg-blue-600 transition duration-150">
+                        Submit form
+                        <svg class="h-4 w-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 12h14"></path></svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="parent-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center modal-backdrop transition-opacity duration-300 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-2xl max-w-2xl w-full max-h-full overflow-y-auto transform transition-transform duration-300 scale-95" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <header class="flex justify-between items-center pb-3 border-b mb-4">
+                <h3 id="modal-title" class="text-xl font-semibold text-gray-800">Add New Parent (Record)</h3>
+                <button type="button" onclick="closeParentModal()" class="text-gray-400 hover:text-gray-600 transition">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </header>
+
+            <form id="parent-form">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="fatherName" class="block text-sm font-medium text-gray-700">Father's Name:</label>
+                        <input type="text" id="fatherName" name="fatherName" class="input-text mt-1" placeholder="Father's Name">
+                    </div>
+                    <div>
+                        <label for="fatherPhone" class="block text-sm font-medium text-gray-700">Father's Phone:</label>
+                        <input type="tel" id="fatherPhone" name="fatherPhone" class="input-text mt-1" placeholder="+880">
+                    </div>
+
+                    <div>
+                        <label for="motherName" class="block text-sm font-medium text-gray-700">Mother's Name:</label>
+                        <input type="text" id="motherName" name="motherName" class="input-text mt-1" placeholder="Mother's Name">
+                    </div>
+                    <div>
+                        <label for="motherPhone" class="block text-sm font-medium text-gray-700">Mother's Phone:</label>
+                        <input type="tel" id="motherPhone" name="motherPhone" class="input-text mt-1" placeholder="+880">
+                    </div>
+                </div>
+
+                <div class="mt-4 border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <h4 class="col-span-full text-lg font-medium text-gray-700 mb-2">Guardian Information (Primary Contact):</h4>
+                    <div>
+                        <label for="guardianName" class="block text-sm font-medium text-gray-700">Guardian's Name: <span class="required-star">*</span></label>
+                        <input type="text" id="guardianName" name="guardianName" class="input-text mt-1" placeholder="Guardian's Name" required>
+                    </div>
+                    <div>
+                        <label for="guardianPhone" class="block text-sm font-medium text-gray-700">Guardian's Phone: <span class="required-star">*</span></label>
+                        <input type="tel" id="guardianPhone" name="guardianPhone" class="input-text mt-1" placeholder="+880" required>
+                    </div>
+                </div>
+
+                <div class="mt-4 border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <h4 class="col-span-full text-lg font-medium text-gray-700 mb-2">Login Credential (Optional - For future use):</h4>
+                    <div>
+                        <label for="parentEmail" class="block text-sm font-medium text-gray-700">Email (Optional):</label>
+                        <input type="email" id="parentEmail" name="parentEmail" class="input-text mt-1" placeholder="Email for login">
+                    </div>
+                    <div>
+                        <label for="parentPassword" class="block text-sm font-medium text-gray-700">Password (Optional):</label>
+                        <input type="password" id="parentPassword" name="parentPassword" class="input-text mt-1">
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-8 pt-4 border-t">
+                    <button type="button" onclick="closeParentModal()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-150">Close</button>
+                    <button type="submit" class="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-150">Save Parent Record</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-storage.js";
+
+    // --- Configuration and Initialization ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyAjoRYAXQa4J43L4oLmHmUoK7ZqMKCdrxI",
+        authDomain: "programme-7eb45.firebaseapp.com",
+        databaseURL: "https://programme-7eb45-default-rtdb.firebaseio.com",
+        projectId: "programme-7eb45",
+        storageBucket: "programme-7eb45.firebasestorage.app",
+        messagingSenderId: "431090813085",
+        appId: "1:431090813085:web:496fc0d8bb5e57af53ec74",
+        measurementId: "G-FE49VB7F1B"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const storage = getStorage(app);
+
+    let isAuthReady = false;
+    let currentStep = 1;
+    let allParents = [];
+    let selectedParent = { id: null, name: null, phone: null };
+    let allClasses = [];
+    let allSections = [];
+    let allSubjects = [];
+
+    // --- Utility Functions ---
+    const showMessage = (title, content, isSuccess = true) => {
+        document.getElementById('message-title').textContent = title;
+        document.getElementById('message-title').className = isSuccess ? 'text-xl font-semibold mb-3 text-success' : 'text-xl font-semibold mb-3 text-error';
+        document.getElementById('message-content').textContent = content;
+        document.getElementById('message-modal').classList.remove('hidden');
+    };
+
+    window.hideMessage = () => {
+        document.getElementById('message-modal').classList.add('hidden');
+    };
+
+    const showParentModal = () => {
+        document.getElementById('parent-modal').classList.remove('hidden');
+        document.getElementById('parent-form').reset();
+    };
+
+    window.closeParentModal = () => {
+        document.getElementById('parent-modal').classList.add('hidden');
+    };
+
+    // --- Firebase Data Loading Functions ---
+    const loadClassesFromFirebase = async () => {
+        try {
+            const q = query(collection(db, "classes"), orderBy("name"));
+            const querySnapshot = await getDocs(q);
+            allClasses = [];
+            const classSelect = document.getElementById('class');
+            classSelect.innerHTML = '<option value="">Choose...</option>';
+
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                const classItem = {
+                    id: doc.id,
+                    name: data.name,
+                    sections: data.sections || []
+                };
+                allClasses.push(classItem);
+
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = data.name;
+                classSelect.appendChild(option);
+            });
+
+        } catch (error) {
+            console.error("Error loading classes:", error);
+            document.getElementById('class').innerHTML = '<option value="">Error loading classes</option>';
+        }
+    };
+
+    const loadSectionsFromFirebase = async (classId) => {
+    try {
+        const sectionSelect = document.getElementById('section');
+        sectionSelect.innerHTML = '<option value="">Loading sections...</option>';
+        
+        // Simple query without ordering first to avoid index issues
+        const q = query(collection(db, "sections"), where("classId", "==", classId));
+        const querySnapshot = await getDocs(q);
+        
+        sectionSelect.innerHTML = '<option value="">Choose Section...</option>';
+        
+        if (querySnapshot.empty) {
+            sectionSelect.innerHTML = '<option value="">No sections available for this class</option>';
+            return;
+        }
+        
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const option = document.createElement('option');
+            option.value = data.name;
+            option.textContent = data.name;
+            sectionSelect.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error("Error loading sections:", error);
+        const sectionSelect = document.getElementById('section');
+        sectionSelect.innerHTML = '<option value="">Error loading sections</option>';
+        
+        // Fallback: Try to load from class document
+        try {
+            const classDoc = allClasses.find(c => c.id === classId);
+            if (classDoc && classDoc.sections && classDoc.sections.length > 0) {
+                sectionSelect.innerHTML = '<option value="">Choose Section...</option>';
+                classDoc.sections.forEach(section => {
+                    const option = document.createElement('option');
+                    option.value = section;
+                    option.textContent = section;
+                    sectionSelect.appendChild(option);
+                });
+            }
+        } catch (fallbackError) {
+            console.error("Fallback also failed:", fallbackError);
+        }
+    }
+};
+
+    const loadSubjectsFromFirebase = async () => {
+        try {
+            const q = query(collection(db, "subjects"), orderBy("name"));
+            const querySnapshot = await getDocs(q);
+            allSubjects = [];
+            const mandatoryContainer = document.querySelector('#additional-subjects-list');
+            const fourthSubjectSelect = document.getElementById('fourthSubject');
+            
+            // Clear existing options
+            mandatoryContainer.innerHTML = '';
+            fourthSubjectSelect.innerHTML = '<option value="">Select Fourth Subject</option>';
+
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                const subject = {
+                    id: doc.id,
+                    name: data.name,
+                    type: data.type || 'additional', // mandatory, additional, optional
+                    isDefault: data.isDefault || false
+                };
+                allSubjects.push(subject);
+
+                // Add to appropriate container based on type
+                if (subject.type === 'mandatory') {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center';
+                    div.innerHTML = `
+                        <input type="checkbox" name="mandatorySubject" value="${subject.name}" 
+                               ${subject.isDefault ? 'checked disabled' : ''} 
+                               class="rounded text-primary focus:ring-primary">
+                        <span class="ml-2 text-sm text-gray-600">${subject.name}</span>
+                    `;
+                    mandatoryContainer.appendChild(div);
+                } else if (subject.type === 'additional') {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center';
+                    div.innerHTML = `
+                        <input type="checkbox" name="additionalSubject" value="${subject.name}" 
+                               class="rounded text-primary focus:ring-primary">
+                        <span class="ml-2 text-sm text-gray-600">${subject.name}</span>
+                    `;
+                    mandatoryContainer.appendChild(div);
+                }
+
+                // Add to fourth subject dropdown
+                if (subject.type === 'optional') {
+                    const option = document.createElement('option');
+                    option.value = subject.name;
+                    option.textContent = subject.name;
+                    fourthSubjectSelect.appendChild(option);
+                }
+            });
+
+        } catch (error) {
+            console.error("Error loading subjects:", error);
+        }
+    };
+
+    // --- Authentication & Initialization ---
+    onAuthStateChanged(auth, (user) => {
+        if (!user) {
+            signInAnonymously(auth)
+                .then(() => {
+                    console.log("Signed in anonymously.");
+                    isAuthReady = true;
+                    loadParents();
+                    loadClassesFromFirebase();
+                    loadSubjectsFromFirebase();
+                })
+                .catch((error) => {
+                    console.error("Initialization error:", error);
+                    showMessage("Auth Error", "Could not initialize authentication.", false);
+                });
+        } else {
+            isAuthReady = true;
+            loadParents();
+            loadClassesFromFirebase();
+            loadSubjectsFromFirebase();
+        }
+    });
+
+    // --- Step Navigation Logic ---
+    const step1Content = document.getElementById('step-1-content');
+    const step2Content = document.getElementById('step-2-content');
+    const step1Indicator = document.getElementById('step-1-indicator');
+    const step2Indicator = document.getElementById('step-2-indicator');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const submitBtn = document.getElementById('submit-btn');
+
+    const validateStep = (step) => {
+        const container = step === 1 ? step1Content : step2Content;
+        const requiredFields = container.querySelectorAll('[required]');
+        let isValid = true;
+        
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                isValid = false;
+                field.classList.add('border-error');
+            } else {
+                field.classList.remove('border-error');
+            }
+        });
+
+        if (step === 2 && !selectedParent.id) {
+            isValid = false;
+            document.getElementById('parent').classList.add('border-error');
+        } else if (step === 2) {
+            document.getElementById('parent').classList.remove('border-error');
+        }
+        
+        return isValid;
+    };
+
+    const updateStepUI = () => {
+        step1Content.style.display = 'none';
+        step2Content.style.display = 'none';
+        step1Indicator.classList.remove('active', 'complete');
+        step2Indicator.classList.remove('active', 'complete');
+        prevBtn.classList.add('hidden');
+        nextBtn.classList.add('hidden');
+        submitBtn.classList.add('hidden');
+
+        if (currentStep === 1) {
+            step1Content.style.display = 'grid';
+            step1Indicator.classList.add('active');
+            nextBtn.classList.remove('hidden');
+        } else if (currentStep === 2) {
+            step2Content.style.display = 'grid';
+            step1Indicator.classList.add('complete');
+            step2Indicator.classList.add('active');
+            prevBtn.classList.remove('hidden');
+            submitBtn.classList.remove('hidden');
+        }
+    };
+
+    nextBtn.addEventListener('click', () => {
+        if (currentStep === 1 && validateStep(1)) {
+            currentStep = 2;
+            updateStepUI();
+        } else if (currentStep === 1) {
+            showMessage("Validation Error", "Please fill in all required fields in Step 1.", false);
+        }
+    });
+
+    prevBtn.addEventListener('click', () => {
+        if (currentStep === 2) {
+            currentStep = 1;
+            updateStepUI();
+        }
+    });
+
+    // Initialize UI
+    updateStepUI();
+
+    // --- Dynamic Form Listeners ---
+    document.getElementById('passportPhoto').addEventListener('change', (e) => {
+        const fileName = e.target.files[0] ? e.target.files[0].name : 'No file selected';
+        document.getElementById('file-name-display').textContent = fileName;
+    });
+
+    // District Dropdown Logic
+    const districts = {
+        'Dhaka': ['Dhaka North', 'Dhaka South', 'Gazipur', 'Narayanganj'],
+        'Chittagong': ['Chittagong City', 'Cox\'s Bazar', 'Feni']
+    };
+
+    document.getElementById('state').addEventListener('change', (e) => {
+        const state = e.target.value;
+        const districtSelect = document.getElementById('district');
+        districtSelect.innerHTML = '<option value="">Choose...</option>';
+        if (state && districts[state]) {
+            districts[state].forEach(district => {
+                const option = document.createElement('option');
+                option.value = district;
+                option.textContent = district;
+                districtSelect.appendChild(option);
+            });
+        } else {
+            districtSelect.innerHTML = '<option value="">Select State First...</option>';
+        }
+    });
+
+    // Class change listener for sections
+    // Class change listener for sections - এই অংশটি আপনার কোডে ইতিমধ্যে আছে
+document.getElementById('class').addEventListener('change', (e) => {
+    const classId = e.target.value;
+    if (classId) {
+        loadSectionsFromFirebase(classId);
+    } else {
+        document.getElementById('section').innerHTML = '<option value="">Select Class First...</option>';
+    }
+});
+
+    // --- Parent Management Logic ---
+    const loadParents = async (selectId = null) => {
+        const parentSelect = document.getElementById('parent');
+        parentSelect.innerHTML = '<option value="">Loading Parents...</option>';
+
+        try {
+            const q = query(collection(db, "parents"), orderBy("guardianName"));
+            const querySnapshot = await getDocs(q);
+            allParents = [];
+            parentSelect.innerHTML = '<option value="">Select Existing Parent...</option>';
+
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                const parent = {
+                    id: doc.id,
+                    name: data.guardianName,
+                    phone: data.guardianPhone,
+                    data: data
+                };
+                allParents.push(parent);
+
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = `${data.guardianName} (${data.guardianPhone})`;
+                parentSelect.appendChild(option);
+            });
+
+            if (selectId) {
+                parentSelect.value = selectId;
+                parentSelect.dispatchEvent(new Event('change'));
+            }
+
+        } catch (error) {
+            console.error("Error loading parents:", error);
+            parentSelect.innerHTML = '<option value="">Error loading parents</option>';
+        }
+    };
+    
+    document.getElementById('addNewParent').addEventListener('click', showParentModal);
+
+    document.getElementById('parent').addEventListener('change', (e) => {
+        const selectedId = e.target.value;
+        const display = document.getElementById('parent-info-display');
+        
+        selectedParent = { id: null, name: null, phone: null };
+
+        if (selectedId) {
+            const parent = allParents.find(p => p.id === selectedId);
+            if (parent) {
+                selectedParent.id = parent.id;
+                selectedParent.name = parent.name;
+                selectedParent.phone = parent.phone;
+                document.getElementById('selected-parent-name').textContent = parent.name;
+                document.getElementById('selected-parent-id').textContent = parent.id;
+                display.classList.remove('hidden');
+                document.getElementById('parent').classList.remove('border-error');
+            }
+        } else {
+            display.classList.add('hidden');
+        }
+    });
+
+    document.getElementById('parentSearchInput').addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const parentSelect = document.getElementById('parent');
+        parentSelect.innerHTML = '<option value="">Select Existing Parent...</option>';
+        
+        const filteredParents = allParents.filter(p => 
+            p.name.toLowerCase().includes(searchTerm) || p.phone.includes(searchTerm)
+        );
+
+        filteredParents.forEach(parent => {
+            const option = document.createElement('option');
+            option.value = parent.id;
+            option.textContent = `${parent.name} (${parent.phone})`;
+            parentSelect.appendChild(option);
+        });
+    });
+    
+    // Parent Form Submission
+    document.getElementById('parent-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const guardianName = document.getElementById('guardianName').value.trim();
+        const guardianPhone = document.getElementById('guardianPhone').value.trim();
+        
+        if (!guardianName || !guardianPhone) {
+            showMessage("Validation Error", "Guardian Name and Phone are required.", false);
+            return;
+        }
+
+        try {
+            const parentData = {
+                fatherName: document.getElementById('fatherName').value,
+                fatherPhone: document.getElementById('fatherPhone').value,
+                motherName: document.getElementById('motherName').value,
+                motherPhone: document.getElementById('motherPhone').value,
+                guardianName: guardianName,
+                guardianPhone: guardianPhone,
+                loginEmail: document.getElementById('parentEmail').value || null,
+                loginPassword: document.getElementById('parentPassword').value ? 'SET' : 'NOT SET',
+                role: 'parent',
+                createdAt: serverTimestamp(),
+            };
+
+            const docRef = await addDoc(collection(db, "parents"), parentData);
+            
+            showMessage("Success", "New Parent record created successfully in Firestore.", true);
+            
+            await loadParents(docRef.id); 
+            closeParentModal();
+
+        } catch (error) {
+            console.error("Parent creation error:", error);
+            showMessage("Parent Creation Error", error.message, false);
+        }
+    });
+
+    // --- File Upload Function ---
+    const uploadFile = async (file) => {
+        if (!file) return null;
+
+        const fileExtension = file.name.split('.').pop();
+        const fileName = `students/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExtension}`;
+        const storageReference = storageRef(storage, fileName);
+
+        const snapshot = await uploadBytes(storageReference, file);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+        return downloadURL;
+    };
+
+    // --- Main Form Submission ---
+    document.getElementById('admission-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        if (!validateStep(2)) {
+            showMessage("Validation Error", "Please fill in all required fields in Step 2.", false);
+            return;
+        }
+
+        try {
+            submitBtn.textContent = 'Submitting...';
+            submitBtn.disabled = true;
+
+            // Upload File
+            const passportPhotoFile = document.getElementById('passportPhoto').files[0];
+            let photoURL = null;
+
+            if (passportPhotoFile) {
+                photoURL = await uploadFile(passportPhotoFile);
+            }
+
+            // Gather Subject Data
+            const mandatorySubjects = Array.from(document.querySelectorAll('input[name="mandatorySubject"]:checked')).map(cb => cb.value);
+            const additionalSubjects = Array.from(document.querySelectorAll('input[name="additionalSubject"]:checked')).map(cb => cb.value);
+            const fourthSubject = document.getElementById('fourthSubject').value;
+
+            if (fourthSubject) {
+                additionalSubjects.push(fourthSubject);
+            }
+
+            // Get selected class and section names
+            const selectedClassId = document.getElementById('class').value;
+            const selectedClass = allClasses.find(c => c.id === selectedClassId);
+            const className = selectedClass ? selectedClass.name : '';
+            const sectionName = document.getElementById('section').value;
+
+            // Assemble Final Data
+            const studentData = {
+                // Step 1 Data (Personal)
+                fullName: document.getElementById('fullName').value,
+                address: document.getElementById('address').value,
+                email: document.getElementById('email').value,
+                gender: document.getElementById('gender').value,
+                dateOfBirth: document.getElementById('dateOfBirth').value,
+                phone: document.getElementById('phone').value,
+                nationality: document.getElementById('nationality').value,
+                telephone: document.getElementById('telephone').value,
+                state: document.getElementById('state').value,
+                district: document.getElementById('district').value,
+                bloodGroup: document.getElementById('bloodGroup').value,
+                passportPhotoURL: photoURL,
+
+                // Step 2 Data (Academic/School)
+                classId: selectedClassId,
+                className: className,
+                section: sectionName,
+                group: document.getElementById('group').value,
+                parentID: selectedParent.id,
+                parentName: selectedParent.name,
+                parentPhone: selectedParent.phone,
+                yearAdmitted: document.getElementById('yearAdmitted').value,
+                rollNumber: document.getElementById('rollNumber').value,
+                admissionNumber: document.getElementById('admissionNumber').value,
+                dormitory: document.getElementById('dormitory').value,
+                dormitoryRoomNo: document.getElementById('dormitoryRoomNo').value,
+                sportHouse: document.getElementById('sportHouse').value,
+                
+                mandatorySubjects: mandatorySubjects,
+                additionalSubjects: additionalSubjects,
+
+                createdAt: serverTimestamp(),
+                status: 'active'
+            };
+
+            // Save to Firestore
+            await addDoc(collection(db, "students"), studentData);
+
+            // Success
+            document.getElementById('admission-form').reset();
+            selectedParent = { id: null, name: null, phone: null };
+            document.getElementById('parent-info-display').classList.add('hidden');
+            document.getElementById('file-name-display').textContent = 'No file selected';
+            
+            // Return to step 1
+            currentStep = 1;
+            updateStepUI();
+            
+            showMessage("Success! 🎉", "Student admission data saved successfully!", true);
+
+        } catch (error) {
+            console.error("Submission error:", error);
+            showMessage("Submission Error", `An error occurred: ${error.message}`, false);
+        } finally {
+            submitBtn.textContent = 'Submit form';
+            submitBtn.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>
